@@ -387,140 +387,197 @@
 
     <script src="https://cdn.jsdelivr.net/npm/word-exists@1.0.0/wordExists.js"></script>
     <script>
-        const VOWELS = new Set(['a', 'e', 'i', 'o', 'u']);
-        let direction = null; // 'forward' or 'reverse'
-        let dictionaryLoaded = false;
-        let englishWords = new Set();
+        const vowels = ['a', 'e', 'i', 'o', 'u'];
+        const consonantClusters = ['ch', 'sh', 'th', 'ph', 'wh', 'qu', 'tr', 'cr', 'br', 'fr', 'gr', 'pr', 'dr', 'bl', 'cl', 'fl', 'gl', 'pl', 'sl', 'sc', 'sk', 'sm', 'sn', 'sp', 'st', 'sw', 'thr', 'shr', 'str', 'spl', 'spr', 'squ', 'scr'];
 
-        // Load dictionary from CDN
-        fetch('https://cdn.jsdelivr.net/npm/word-exists@1.0.0/dictionary.json')
-            .then(response => response.json())
-            .then(words => {
-                englishWords = new Set(words);
-                dictionaryLoaded = true;
-                console.log('Dictionary loaded with', words.length, 'words');
-            })
-            .catch(error => {
-                console.warn('Failed to load dictionary, using fallback:', error);
-                // Fallback to basic word list
-                const fallbackWords = [
-                    'hello', 'there', 'world', 'this', 'that', 'with', 'have', 'will', 'your', 'from', 'they', 'know',
-                    'want', 'been', 'good', 'much', 'some', 'time', 'very', 'when', 'come', 'here', 'just', 'like',
-                    'long', 'make', 'many', 'over', 'such', 'take', 'than', 'them', 'well', 'where', 'would', 'about',
-                    'great', 'could', 'state', 'only', 'think', 'even', 'most', 'find', 'hand', 'high', 'keep', 'last',
-                    'leave', 'life', 'name', 'next', 'number', 'part', 'place', 'point', 'right', 'same', 'small',
-                    'sound', 'still', 'tell', 'through', 'turn', 'water', 'work', 'year', 'back', 'call', 'close',
-                    'country', 'course', 'day', 'door', 'end', 'every', 'family', 'few', 'give', 'go', 'house',
-                    'large', 'line', 'little', 'live', 'look', 'man', 'new', 'old', 'open', 'put', 'read', 'real',
-                    'room', 'say', 'school', 'seem', 'stop', 'study', 'tell', 'thing', 'today', 'town', 'try', 'under',
-                    'way', 'week', 'woman', 'word', 'write', 'yes', 'yet', 'apple', 'banana', 'orange', 'grape',
-                    'dog', 'cat', 'bird', 'fish', 'horse', 'pig', 'cow', 'chicken', 'sheep', 'goat', 'trash', 'there',
-                    'their', 'theyre', 'three', 'through', 'thought', 'thousand', 'strong', 'string', 'street', 'store'
-                ];
-                englishWords = new Set(fallbackWords);
-                dictionaryLoaded = true;
-            });
+        // Profanity filter - words to avoid in reverse translation
+        const profanityList = ['shit', 'fuck', 'damn', 'hell', 'ass', 'bitch', 'bastard', 'crap', 'piss', 'cock', 'dick', 'pussy', 'cunt', 'whore', 'slut', 'fag', 'nigger', 'retard'];
 
-        function isVowel(ch) { return VOWELS.has(ch.toLowerCase()); }
-
-        function isEnglishWord(word) {
-            if (!dictionaryLoaded) return false; // Don't validate until dictionary is loaded
-            return englishWords.has(word.toLowerCase());
+        function isProfanity(word) {
+            return profanityList.includes(word.toLowerCase());
         }
 
-        function getCluster(word) {
-            const lower = word.toLowerCase();
-            if (isVowel(lower[0])) return '';
-            let i = 0;
-            while (i < lower.length && !isVowel(lower[i])) {
-                if (lower[i] === 'q' && lower[i + 1] === 'u') { i += 2; break; }
-                i++;
-            }
-            return word.slice(0, i);
+        function isVowel(char) {
+            return vowels.includes(char.toLowerCase());
         }
 
-        function towardsPigLatin(raw) {
-            const match = raw.match(/^([^a-zA-Z']*)([a-zA-Z']+)([^a-zA-Z']*)$/);
-            if (!match) return raw;
-            const [, pre, word, post] = match;
-            if (!word) return raw;
-            const allUpper = word === word.toUpperCase() && word !== word.toLowerCase();
-            const titleCase = !allUpper && word[0] === word[0].toUpperCase() && word[0].toLowerCase() !== word[0];
-            const lower = word.toLowerCase();
-            let result;
-            if (isVowel(lower[0])) {
-                result = lower + 'hay';
-            } else {
-                const cluster = getCluster(lower);
-                result = lower.slice(cluster.length) + cluster + 'ay';
+        function getConsonantCluster(word) {
+            const lowerWord = word.toLowerCase();
+
+            // Check for three-letter clusters first
+            for (let cluster of consonantClusters) {
+                if (cluster.length === 3 && lowerWord.startsWith(cluster)) {
+                    return cluster;
+                }
             }
-            if (allUpper) result = result.toUpperCase();
-            else if (titleCase) result = result[0].toUpperCase() + result.slice(1);
-            return pre + result + post;
+
+            // Then check for two-letter clusters
+            for (let cluster of consonantClusters) {
+                if (cluster.length === 2 && lowerWord.startsWith(cluster)) {
+                    return cluster;
+                }
+            }
+
+            // Single consonant
+            if (!isVowel(lowerWord[0])) {
+                return lowerWord[0];
+            }
+
+            return '';
         }
 
-        function fromPigLatin(raw) {
-            const match = raw.match(/^([^a-zA-Z']*)([a-zA-Z']+)([^a-zA-Z']*)$/);
-            if (!match) return raw;
-            const [, pre, word, post] = match;
-            if (!word) return raw;
-            const allUpper = word === word.toUpperCase() && word !== word.toLowerCase();
-            const titleCase = !allUpper && word[0] === word[0].toUpperCase() && word[0].toLowerCase() !== word[0];
-            const lower = word.toLowerCase();
-            let result;
-            let candidates = [];
+        function preserveCase(original, transformed) {
+            if (!original || !transformed) return transformed;
 
-            // Try vowel-origin method (strip 'hay')
-            if (lower.endsWith('hay') && lower.length > 3) {
-                candidates.push(lower.slice(0, -3));
+            let result = '';
+            let transformedLower = transformed.toLowerCase();
+
+            // Check if original is all uppercase
+            if (original === original.toUpperCase() && original !== original.toLowerCase()) {
+                return transformed.toUpperCase();
             }
 
-            // Try consonant-origin method (move cluster back to front)
-            if (lower.endsWith('ay') && lower.length > 2) {
-                const stem = lower.slice(0, -2); // strip 'ay'
-                // Method 1: Find trailing consonant cluster
-                let i = stem.length - 1;
-                while (i >= 0 && !isVowel(stem[i])) i--;
-                const cluster1 = stem.slice(i + 1);
-                const body1 = stem.slice(0, i + 1);
-                candidates.push(cluster1 + body1);
-
-                // Method 2: Find first vowel sequence
-                let j = 0;
-                while (j < stem.length && isVowel(stem[j])) j++;
-                let k = j;
-                while (k < stem.length && !isVowel(stem[k])) k++;
-                const body2 = stem.slice(0, j);
-                const cluster2 = stem.slice(j, k);
-                if (cluster2) candidates.push(cluster2 + body2);
+            // Check if original is capitalized
+            if (original[0] === original[0].toUpperCase() && original.slice(1) === original.slice(1).toLowerCase()) {
+                return transformed[0].toUpperCase() + transformed.slice(1).toLowerCase();
             }
 
-            // If no candidates, return original
-            if (candidates.length === 0) {
-                result = lower;
-            } else {
-                // Choose the first candidate that's in our dictionary
-                result = candidates.find(candidate => isEnglishWord(candidate)) || candidates[0];
-            }
-
-            if (!result) result = lower; // fallback
-            if (allUpper) result = result.toUpperCase();
-            else if (titleCase) result = result[0].toUpperCase() + result.slice(1);
-            return pre + result + post;
+            return transformed;
         }
 
-        function translateText(text, fn) {
-            return text.replace(/\S+/g, fn);
+        function englishToPigLatin(word) {
+            if (!word) return '';
+
+            const lowerWord = word.toLowerCase();
+
+            // If starts with vowel, add -hay
+            if (isVowel(lowerWord[0])) {
+                return preserveCase(word, word + 'hay');
+            }
+
+            // Get consonant cluster
+            const cluster = getConsonantCluster(word);
+            if (cluster) {
+                const rest = word.slice(cluster.length);
+                const pigLatinWord = rest + cluster + 'ay';
+                return preserveCase(word, pigLatinWord);
+            }
+
+            return word;
         }
+
+        function pigLatinToEnglish(word) {
+            if (!word) return '';
+
+            const lowerWord = word.toLowerCase();
+
+            // Check if it ends with -hay (not just -ay)
+            if (lowerWord.endsWith('hay') && lowerWord.length > 3) {
+                const withoutHay = word.slice(0, -3);
+
+                // Check if removing -hay gives us a valid word
+                if (wordExists(withoutHay.toLowerCase())) {
+                    return preserveCase(word, withoutHay);
+                }
+
+                // If not valid, treat as -ay ending and continue below
+                // Remove -ay instead and process
+                const withoutAy = word.slice(0, -2);
+                return reverseConsonantMove(word, withoutAy);
+            }
+
+            // Check if it ends with -ay
+            if (lowerWord.endsWith('ay') && lowerWord.length > 2) {
+                const withoutAy = word.slice(0, -2);
+                return reverseConsonantMove(word, withoutAy);
+            }
+
+            return word;
+        }
+
+        function reverseConsonantMove(originalWord, withoutAy) {
+            const lowerWithoutAy = withoutAy.toLowerCase();
+
+            // Try to find consonant cluster at the end that should move to beginning
+            // Check three-letter clusters first
+            for (let cluster of consonantClusters) {
+                if (cluster.length === 3 && lowerWithoutAy.endsWith(cluster)) {
+                    const rest = withoutAy.slice(0, -3);
+                    const englishWord = cluster + rest;
+                    if (wordExists(englishWord.toLowerCase()) && !isProfanity(englishWord)) {
+                        return preserveCase(originalWord, englishWord);
+                    }
+                }
+            }
+
+            // Check two-letter clusters
+            for (let cluster of consonantClusters) {
+                if (cluster.length === 2 && lowerWithoutAy.endsWith(cluster)) {
+                    const rest = withoutAy.slice(0, -2);
+                    const englishWord = cluster + rest;
+                    if (wordExists(englishWord.toLowerCase()) && !isProfanity(englishWord)) {
+                        return preserveCase(originalWord, englishWord);
+                    }
+                }
+            }
+
+            // Try single consonant at the end
+            if (lowerWithoutAy.length > 0) {
+                const lastChar = lowerWithoutAy[lowerWithoutAy.length - 1];
+                if (!isVowel(lastChar)) {
+                    const rest = withoutAy.slice(0, -1);
+                    const englishWord = lastChar + rest;
+                    if (wordExists(englishWord.toLowerCase()) && !isProfanity(englishWord)) {
+                        return preserveCase(originalWord, englishWord);
+                    }
+                }
+            }
+
+            return originalWord;
+        }
+
+        function translateText(text, direction) {
+            if (!text) return '';
+
+            // Split by words but preserve punctuation and whitespace
+            const tokens = text.split(/(\s+|[.,!?;:"'()[\]{}])/);
+
+            return tokens.map(token => {
+                // Skip whitespace and punctuation
+                if (!token || /^\s+$/.test(token) || /^[.,!?;:"'()[\]{}]+$/.test(token)) {
+                    return token;
+                }
+
+                if (direction === 'toPigLatin') {
+                    return englishToPigLatin(token);
+                } else {
+                    return pigLatinToEnglish(token);
+                }
+            }).join('');
+        }
+
+        let isUpdating = false;
 
         function onEnglishInput() {
-            const val = document.getElementById('english').value;
-            document.getElementById('piglatin').value = val ? translateText(val, towardsPigLatin) : '';
+            if (isUpdating) return;
+
+            const englishText = document.getElementById('english').value;
+            const pigLatinText = translateText(englishText, 'toPigLatin');
+
+            isUpdating = true;
+            document.getElementById('piglatin').value = pigLatinText;
+            isUpdating = false;
         }
 
         function onPigLatinInput() {
-            const val = document.getElementById('piglatin').value;
-            document.getElementById('english').value = val ? translateText(val, fromPigLatin) : '';
+            if (isUpdating) return;
+
+            const pigLatinText = document.getElementById('piglatin').value;
+            const englishText = translateText(pigLatinText, 'toEnglish');
+
+            isUpdating = true;
+            document.getElementById('english').value = englishText;
+            isUpdating = false;
         }
 
         function clearAll() {
@@ -529,22 +586,21 @@
         }
 
         function copyOutput() {
-            // Copy whichever side was most recently focused, defaulting to pig latin
-            const pl = document.getElementById('piglatin').value;
-            const en = document.getElementById('english').value;
-            const text = lastFocused === 'english' ? en : pl;
-            if (!text) return;
-            navigator.clipboard.writeText(text).then(() => {
-                const btn = document.getElementById('copyBtn');
-                btn.textContent = 'Copied!';
-                btn.classList.add('copied');
-                setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1800);
+            const pigLatinText = document.getElementById('piglatin').value;
+            const copyBtn = document.getElementById('copyBtn');
+
+            if (!pigLatinText) return;
+
+            navigator.clipboard.writeText(pigLatinText).then(() => {
+                copyBtn.textContent = 'Copied!';
+                copyBtn.classList.add('copied');
+
+                setTimeout(() => {
+                    copyBtn.textContent = 'Copy';
+                    copyBtn.classList.remove('copied');
+                }, 2000);
             });
         }
-
-        let lastFocused = 'piglatin';
-        document.getElementById('english').addEventListener('focus', () => lastFocused = 'english');
-        document.getElementById('piglatin').addEventListener('focus', () => lastFocused = 'piglatin');
     </script>
 </body>
 
