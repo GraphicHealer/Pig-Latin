@@ -507,18 +507,20 @@
                 const withoutHay = word.slice(0, -3);
                 const withoutAy = word.slice(0, -2);
 
-                // Try both possibilities
-                const hayResult = await checkWordExists(withoutHay.toLowerCase());
-                const consonantResult = await reverseConsonantMove(word, withoutAy);
+                // Check both possibilities in parallel
+                const [hayResult, consonantResult] = await Promise.all([
+                    checkWordExists(withoutHay.toLowerCase()),
+                    reverseConsonantMove(word, withoutAy)
+                ]);
 
-                // If consonant reversal found a valid word (not same as original), prefer it
-                if (consonantResult !== word) {
-                    return consonantResult;
+                // If removing -hay gives a valid vowel-start word, prefer it (that's the intended rule)
+                if (hayResult && isVowel(withoutHay[0])) {
+                    return preserveCase(word, withoutHay);
                 }
 
-                // Otherwise, if removing -hay gives valid word, use that
-                if (hayResult) {
-                    return preserveCase(word, withoutHay);
+                // Otherwise, if consonant reversal found a valid word, use that
+                if (consonantResult !== word) {
+                    return consonantResult;
                 }
 
                 // If neither worked, return original
