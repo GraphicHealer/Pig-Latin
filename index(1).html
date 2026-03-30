@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pig Latin Translator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Mono:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #f5f0e8;
+      --surface: #fdf9f3;
+      --ink: #1a1208;
+      --accent: #e8420a;
+      --accent2: #f7c948;
+      --muted: #8c7b62;
+      --border: #d4c8b0;
+      --radius: 16px;
+    }
+
+    body {
+      font-family: 'DM Mono', monospace;
+      background: var(--bg);
+      color: var(--ink);
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1.25rem 4rem;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* Decorative background blobs */
+    body::before, body::after {
+      content: '';
+      position: fixed;
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 0;
+    }
+    body::before {
+      width: 520px; height: 520px;
+      background: radial-gradient(circle, #f7c94844 0%, transparent 70%);
+      top: -140px; right: -140px;
+    }
+    body::after {
+      width: 400px; height: 400px;
+      background: radial-gradient(circle, #e8420a22 0%, transparent 70%);
+      bottom: -100px; left: -100px;
+    }
+
+    header {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+      margin-bottom: 1.5rem;
+      margin-top: 1rem;
+    }
+
+    .logo-badge {
+      display: inline-block;
+      background: var(--accent);
+      color: #fff;
+      font-family: 'Syne', sans-serif;
+      font-weight: 800;
+      font-size: 0.7rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      padding: 0.3rem 0.85rem;
+      border-radius: 999px;
+      margin-bottom: 1rem;
+    }
+
+    h1 {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 1.5rem;
+      color: var(--ink);
+    }
+
+    /* Main card */
+    .card {
+      position: relative;
+      z-index: 1;
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      width: 100%;
+      max-width: 680px;
+      padding: 2rem;
+      box-shadow: 0 4px 32px rgba(26,18,8,0.07);
+    }
+
+    .panels {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.25rem;
+    }
+
+    @media (max-width: 540px) {
+      .panels { grid-template-columns: 1fr; }
+    }
+
+    .panel-label {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 0.68rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 0.5rem;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 160px;
+      background: var(--bg);
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      font-family: 'DM Mono', monospace;
+      font-size: 1rem;
+      color: var(--ink);
+      padding: 0.9rem 1rem;
+      resize: vertical;
+      transition: border-color 0.2s;
+      outline: none;
+      line-height: 1.6;
+    }
+
+    textarea:focus {
+      border-color: var(--accent);
+    }
+
+    textarea::placeholder { color: var(--border); }
+
+    .output-box {
+      width: 100%;
+      min-height: 160px;
+      background: var(--ink);
+      color: var(--accent2);
+      border: 1.5px solid var(--ink);
+      border-radius: 10px;
+      padding: 0.9rem 1rem;
+      font-family: 'DM Mono', monospace;
+      font-size: 1rem;
+      line-height: 1.6;
+      word-break: break-word;
+      white-space: pre-wrap;
+      cursor: text;
+      user-select: all;
+    }
+
+    .output-box.empty { color: #4a3f2f; font-style: italic; }
+
+    /* Divider with pig icon */
+    .divider {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+      margin: 1.5rem 0;
+    }
+
+    .divider-line {
+      flex: 1;
+      height: 1.5px;
+      background: var(--border);
+    }
+
+    .pig-icon {
+      width: 40px; height: 40px;
+      background: var(--accent);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.3rem;
+      flex-shrink: 0;
+      box-shadow: 0 2px 8px rgba(232,66,10,0.3);
+      transition: transform 0.3s ease;
+    }
+
+    .pig-icon:hover { transform: rotate(15deg) scale(1.1); }
+
+    /* Actions row */
+    .actions {
+      display: flex;
+      gap: 0.75rem;
+      margin-top: 1.5rem;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 0.82rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      border: none;
+      border-radius: 8px;
+      padding: 0.65rem 1.25rem;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+      flex: 1;
+    }
+
+    .btn-primary:hover {
+      background: #c93508;
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+      background: var(--bg);
+      color: var(--ink);
+      border: 1.5px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .btn-copy {
+      background: var(--accent2);
+      color: var(--ink);
+    }
+
+    .btn-copy:hover { background: #e8b920; }
+    .btn-copy.copied { background: #5cb85c; color: #fff; }
+
+    /* Rules section */
+    .rules {
+      margin-top: 2rem;
+      padding-top: 1.5rem;
+      border-top: 1.5px solid var(--border);
+    }
+
+    .rules-title {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 0.7rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 0.85rem;
+    }
+
+    .rules-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 0.75rem;
+    }
+
+    .rule-card {
+      background: var(--bg);
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      padding: 0.85rem 1rem;
+    }
+
+    .rule-card .example {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+
+    .rule-card .example strong {
+      color: var(--accent);
+    }
+
+    .rule-card .desc {
+      font-size: 0.73rem;
+      color: var(--muted);
+      margin-top: 0.3rem;
+      font-style: italic;
+    }
+
+    /* Live badge */
+    .live-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 0.65rem;
+      color: var(--muted);
+      margin-bottom: 0.5rem;
+    }
+
+    .live-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: #5cb85c;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    footer {
+      position: relative;
+      z-index: 1;
+      margin-top: 2rem;
+      font-size: 0.7rem;
+      color: var(--muted);
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🐷 Pig Latin Translator</h1>
+</header>
+
+<div class="card">
+  <div class="panels">
+    <div>
+      <div class="panel-label">English</div>
+      <textarea id="input" placeholder="Type something here..." oninput="translateLive()"></textarea>
+    </div>
+    <div>
+      <div class="panel-label">Pig Latin</div>
+      <div class="output-box empty" id="output">Your pig latin will appear here...</div>
+    </div>
+  </div>
+
+  <div class="divider">
+    <div class="divider-line"></div>
+    <div class="pig-icon">🐷</div>
+    <div class="divider-line"></div>
+  </div>
+
+  <div class="actions">
+    <button class="btn btn-secondary" onclick="clearAll()">Clear</button>
+    <button class="btn btn-copy" id="copyBtn" onclick="copyOutput()">Copy</button>
+    <button class="btn btn-primary" onclick="translateLive()">Translate →</button>
+  </div>
+
+  <div class="rules">
+    <div class="rules-title">Rules</div>
+    <div class="rules-grid">
+      <div class="rule-card">
+        <div class="example"><strong>dog</strong> → <strong>ogday</strong></div>
+        <div class="desc">Single consonant moves to end + ay</div>
+      </div>
+      <div class="rule-card">
+        <div class="example"><strong>trash</strong> → <strong>ashtray</strong></div>
+        <div class="desc">Consonant cluster moves together + ay</div>
+      </div>
+      <div class="rule-card">
+        <div class="example"><strong>apple</strong> → <strong>applehay</strong></div>
+        <div class="desc">Vowel-start words get -hay added</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer>Made with 🐷 · Pig Latin Translator</footer>
+
+<script>
+  const VOWELS = new Set(['a','e','i','o','u']);
+
+  function isVowel(ch) {
+    return VOWELS.has(ch.toLowerCase());
+  }
+
+  // Returns leading consonant cluster (handles 'qu' as a unit)
+  function getCluster(word) {
+    const lower = word.toLowerCase();
+    // If starts with vowel, no cluster
+    if (isVowel(lower[0])) return '';
+
+    let i = 0;
+    while (i < lower.length && !isVowel(lower[i])) {
+      // Treat 'qu' as a unit — include the 'u'
+      if (lower[i] === 'q' && lower[i+1] === 'u') { i += 2; break; }
+      i++;
+    }
+    return word.slice(0, i);
+  }
+
+  function translateWord(raw) {
+    // Preserve surrounding punctuation
+    const match = raw.match(/^([^a-zA-Z']*)([a-zA-Z']+)([^a-zA-Z']*)$/);
+    if (!match) return raw;
+
+    const [, pre, word, post] = match;
+    if (!word) return raw;
+
+    // Detect casing pattern
+    const allUpper = word === word.toUpperCase() && word !== word.toLowerCase();
+    const titleCase = !allUpper && word[0] === word[0].toUpperCase() && word[0].toLowerCase() !== word[0];
+
+    const lower = word.toLowerCase();
+    let result;
+
+    if (isVowel(lower[0])) {
+      result = lower + 'hay';
+    } else {
+      const cluster = getCluster(lower);
+      const rest = lower.slice(cluster.length);
+      result = rest + cluster + 'ay';
+    }
+
+    if (allUpper) result = result.toUpperCase();
+    else if (titleCase) result = result[0].toUpperCase() + result.slice(1);
+
+    return pre + result + post;
+  }
+
+  function translateText(text) {
+    return text.replace(/\S+/g, translateWord);
+  }
+
+  function translateLive() {
+    const input = document.getElementById('input').value;
+    const output = document.getElementById('output');
+    if (!input.trim()) {
+      output.textContent = 'Your pig latin will appear here...';
+      output.classList.add('empty');
+      return;
+    }
+    output.textContent = translateText(input);
+    output.classList.remove('empty');
+  }
+
+  function clearAll() {
+    document.getElementById('input').value = '';
+    const output = document.getElementById('output');
+    output.textContent = 'Your pig latin will appear here...';
+    output.classList.add('empty');
+  }
+
+  function copyOutput() {
+    const text = document.getElementById('output').textContent;
+    if (!text || document.getElementById('output').classList.contains('empty')) return;
+    navigator.clipboard.writeText(text).then(() => {
+      const btn = document.getElementById('copyBtn');
+      btn.textContent = 'Copied!';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = 'Copy';
+        btn.classList.remove('copied');
+      }, 1800);
+    });
+  }
+</script>
+</body>
+</html>
