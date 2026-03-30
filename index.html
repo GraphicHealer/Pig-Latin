@@ -380,6 +380,11 @@
                     <div class="desc">Vowel-start words get -hay added</div>
                 </div>
             </div>
+            <div class="desc"
+                style="margin-top: 1rem; font-size: 0.73rem; color: var(--muted); font-style: italic; text-align: center;">
+                Note: Reverse translation may not always be perfect. Some words can produce the same Pig Latin form
+                (e.g., "over" and "hover" both become "overhay").
+            </div>
         </div>
     </div>
 
@@ -391,29 +396,15 @@
 
         // Cache for word validation to reduce API calls
         const wordCache = new Map();
-        const profanityCache = new Map();
 
-        // Check if word contains profanity using Purgomalum API
-        async function isProfanity(word) {
-            const lowerWord = word.toLowerCase();
+        // Local profanity filter - only words that could match legitimate Pig Latin translations
+        // e.g., "hits" -> "itshay" could reverse to an inappropriate word
+        const profanityList = new Set([
+            'shit', 'ass', 'hell', 'damn', 'cock', 'dick', 'piss'
+        ]);
 
-            // Check cache first
-            if (profanityCache.has(lowerWord)) {
-                return profanityCache.get(lowerWord);
-            }
-
-            try {
-                const response = await fetch(`https://www.purgomalum.com/service/containsprofanity?text=${encodeURIComponent(lowerWord)}`);
-                const result = await response.text();
-                const containsProfanity = result === 'true';
-
-                // Cache the result
-                profanityCache.set(lowerWord, containsProfanity);
-                return containsProfanity;
-            } catch (error) {
-                // If API fails, be conservative and return false (allow the word)
-                return false;
-            }
+        function isProfanity(word) {
+            return profanityList.has(word.toLowerCase());
         }
 
         // Browser-compatible word validation using Datamuse API
@@ -548,20 +539,14 @@
         async function reverseConsonantMove(originalWord, withoutAy) {
             const lowerWithoutAy = withoutAy.toLowerCase();
 
-            // Try to find consonant cluster at the end that should move to beginning
-            // Check three-letter clusters first
+            // Build list of possible candidates to check
+            const candidates = [];
+
+            // Check three-letter clusters
             for (let cluster of consonantClusters) {
                 if (cluster.length === 3 && lowerWithoutAy.endsWith(cluster)) {
                     const rest = withoutAy.slice(0, -3);
-                    const englishWord = cluster + rest;
-                    // Run both checks in parallel
-                    const [isValid, isProfane] = await Promise.all([
-                        checkWordExists(englishWord.toLowerCase()),
-                        isProfanity(englishWord)
-                    ]);
-                    if (isValid && !isProfane) {
-                        return preserveCase(originalWord, englishWord);
-                    }
+                    candidates.push({ word: cluster + rest, original: originalWord });
                 }
             }
 
@@ -569,15 +554,7 @@
             for (let cluster of consonantClusters) {
                 if (cluster.length === 2 && lowerWithoutAy.endsWith(cluster)) {
                     const rest = withoutAy.slice(0, -2);
-                    const englishWord = cluster + rest;
-                    // Run both checks in parallel
-                    const [isValid, isProfane] = await Promise.all([
-                        checkWordExists(englishWord.toLowerCase()),
-                        isProfanity(englishWord)
-                    ]);
-                    if (isValid && !isProfane) {
-                        return preserveCase(originalWord, englishWord);
-                    }
+                    candidates.push({ word: cluster + rest, original: originalWord });
                 }
             }
 
@@ -586,14 +563,22 @@
                 const lastChar = lowerWithoutAy[lowerWithoutAy.length - 1];
                 if (!isVowel(lastChar)) {
                     const rest = withoutAy.slice(0, -1);
-                    const englishWord = lastChar + rest;
-                    // Run both checks in parallel
-                    const [isValid, isProfane] = await Promise.all([
-                        checkWordExists(englishWord.toLowerCase()),
-                        isProfanity(englishWord)
-                    ]);
-                    if (isValid && !isProfane) {
-                        return preserveCase(originalWord, englishWord);
+                    candidates.push({ word: lastChar + rest, original: originalWord });
+                }
+            }
+
+            // Check all candidates in parallel
+            if (candidates.length > 0) {
+                const validationPromises = candidates.map(c =>
+                    checkWordExists(c.word.toLowerCase()).then(isValid => ({ ...c, isValid }))
+                );
+
+                const results = await Promise.all(validationPromises);
+
+                // Return first valid, non-profane word found
+                for (let result of results) {
+                    if (result.isValid && !isProfanity(result.word)) {
+                        return preserveCase(result.original, result.word);
                     }
                 }
             }
