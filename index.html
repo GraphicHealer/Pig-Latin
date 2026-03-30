@@ -399,9 +399,7 @@
 
         // Local profanity filter - only words that could match legitimate Pig Latin translations
         // e.g., "hits" -> "itshay" could reverse to an inappropriate word
-        const profanityList = new Set([
-            'shit', 'ass', 'hell', 'damn', 'cock', 'dick', 'piss'
-        ]);
+        const profanityList = new Set(['shit']);
 
         function isProfanity(word) {
             return profanityList.has(word.toLowerCase());
