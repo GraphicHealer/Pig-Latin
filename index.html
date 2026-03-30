@@ -137,26 +137,7 @@
 
     textarea::placeholder { color: var(--border); }
 
-    .output-box {
-      width: 100%;
-      min-height: 160px;
-      background: var(--ink);
-      color: var(--accent2);
-      border: 1.5px solid var(--ink);
-      border-radius: 10px;
-      padding: 0.9rem 1rem;
-      font-family: 'DM Mono', monospace;
-      font-size: 1rem;
-      line-height: 1.6;
-      word-break: break-word;
-      white-space: pre-wrap;
-      cursor: text;
-      user-select: all;
-    }
 
-    .output-box.empty { color: #4a3f2f; font-style: italic; }
-
-    /* Divider with pig icon */
     .divider {
       display: flex;
       align-items: center;
@@ -324,11 +305,11 @@
   <div class="panels">
     <div>
       <div class="panel-label">English</div>
-      <textarea id="input" placeholder="Type something here..." oninput="translateLive()"></textarea>
+      <textarea id="english" placeholder="Type English here..." oninput="onEnglishInput()"></textarea>
     </div>
     <div>
       <div class="panel-label">Pig Latin</div>
-      <div class="output-box empty" id="output">Your pig latin will appear here...</div>
+      <textarea id="piglatin" placeholder="Type Pig Latin here..." oninput="onPigLatinInput()"></textarea>
     </div>
   </div>
 
@@ -341,7 +322,6 @@
   <div class="actions">
     <button class="btn btn-secondary" onclick="clearAll()">Clear</button>
     <button class="btn btn-copy" id="copyBtn" onclick="copyOutput()">Copy</button>
-    <button class="btn btn-primary" onclick="translateLive()">Translate →</button>
   </div>
 
   <div class="rules">
@@ -367,91 +347,108 @@
 
 <script>
   const VOWELS = new Set(['a','e','i','o','u']);
+  let direction = null; // 'forward' or 'reverse'
 
-  function isVowel(ch) {
-    return VOWELS.has(ch.toLowerCase());
-  }
+  function isVowel(ch) { return VOWELS.has(ch.toLowerCase()); }
 
-  // Returns leading consonant cluster (handles 'qu' as a unit)
   function getCluster(word) {
     const lower = word.toLowerCase();
-    // If starts with vowel, no cluster
     if (isVowel(lower[0])) return '';
-
     let i = 0;
     while (i < lower.length && !isVowel(lower[i])) {
-      // Treat 'qu' as a unit — include the 'u'
       if (lower[i] === 'q' && lower[i+1] === 'u') { i += 2; break; }
       i++;
     }
     return word.slice(0, i);
   }
 
-  function translateWord(raw) {
-    // Preserve surrounding punctuation
+  function towardsPigLatin(raw) {
     const match = raw.match(/^([^a-zA-Z']*)([a-zA-Z']+)([^a-zA-Z']*)$/);
     if (!match) return raw;
-
     const [, pre, word, post] = match;
     if (!word) return raw;
-
-    // Detect casing pattern
     const allUpper = word === word.toUpperCase() && word !== word.toLowerCase();
     const titleCase = !allUpper && word[0] === word[0].toUpperCase() && word[0].toLowerCase() !== word[0];
-
     const lower = word.toLowerCase();
     let result;
-
     if (isVowel(lower[0])) {
       result = lower + 'hay';
     } else {
       const cluster = getCluster(lower);
-      const rest = lower.slice(cluster.length);
-      result = rest + cluster + 'ay';
+      result = lower.slice(cluster.length) + cluster + 'ay';
     }
-
     if (allUpper) result = result.toUpperCase();
     else if (titleCase) result = result[0].toUpperCase() + result.slice(1);
-
     return pre + result + post;
   }
 
-  function translateText(text) {
-    return text.replace(/\S+/g, translateWord);
+  function fromPigLatin(raw) {
+    const match = raw.match(/^([^a-zA-Z']*)([a-zA-Z']+)([^a-zA-Z']*)$/);
+    if (!match) return raw;
+    const [, pre, word, post] = match;
+    if (!word) return raw;
+    const allUpper = word === word.toUpperCase() && word !== word.toLowerCase();
+    const titleCase = !allUpper && word[0] === word[0].toUpperCase() && word[0].toLowerCase() !== word[0];
+    const lower = word.toLowerCase();
+    let result;
+    // Vowel-origin words end in 'hay' — strip it
+    if (lower.endsWith('hay') && lower.length > 3) {
+      result = lower.slice(0, -3);
+    }
+    // Consonant-origin words end in (cluster)+'ay' — move cluster back to front
+    else if (lower.endsWith('ay') && lower.length > 2) {
+      const stem = lower.slice(0, -2); // strip 'ay'
+      // Find the trailing consonant cluster (everything after the last vowel)
+      let i = stem.length - 1;
+      while (i >= 0 && !isVowel(stem[i])) i--;
+      const cluster = stem.slice(i + 1);
+      const body = stem.slice(0, i + 1);
+      result = cluster + body;
+    } else {
+      result = lower;
+    }
+    if (!result) result = lower; // fallback
+    if (allUpper) result = result.toUpperCase();
+    else if (titleCase) result = result[0].toUpperCase() + result.slice(1);
+    return pre + result + post;
   }
 
-  function translateLive() {
-    const input = document.getElementById('input').value;
-    const output = document.getElementById('output');
-    if (!input.trim()) {
-      output.textContent = 'Your pig latin will appear here...';
-      output.classList.add('empty');
-      return;
-    }
-    output.textContent = translateText(input);
-    output.classList.remove('empty');
+  function translateText(text, fn) {
+    return text.replace(/\S+/g, fn);
+  }
+
+  function onEnglishInput() {
+    const val = document.getElementById('english').value;
+    document.getElementById('piglatin').value = val ? translateText(val, towardsPigLatin) : '';
+  }
+
+  function onPigLatinInput() {
+    const val = document.getElementById('piglatin').value;
+    document.getElementById('english').value = val ? translateText(val, fromPigLatin) : '';
   }
 
   function clearAll() {
-    document.getElementById('input').value = '';
-    const output = document.getElementById('output');
-    output.textContent = 'Your pig latin will appear here...';
-    output.classList.add('empty');
+    document.getElementById('english').value = '';
+    document.getElementById('piglatin').value = '';
   }
 
   function copyOutput() {
-    const text = document.getElementById('output').textContent;
-    if (!text || document.getElementById('output').classList.contains('empty')) return;
+    // Copy whichever side was most recently focused, defaulting to pig latin
+    const pl = document.getElementById('piglatin').value;
+    const en = document.getElementById('english').value;
+    const text = lastFocused === 'english' ? en : pl;
+    if (!text) return;
     navigator.clipboard.writeText(text).then(() => {
       const btn = document.getElementById('copyBtn');
       btn.textContent = 'Copied!';
       btn.classList.add('copied');
-      setTimeout(() => {
-        btn.textContent = 'Copy';
-        btn.classList.remove('copied');
-      }, 1800);
+      setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1800);
     });
   }
+
+  let lastFocused = 'piglatin';
+  document.getElementById('english').addEventListener('focus', () => lastFocused = 'english');
+  document.getElementById('piglatin').addEventListener('focus', () => lastFocused = 'piglatin');
 </script>
 </body>
 </html>
