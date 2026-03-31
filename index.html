@@ -382,8 +382,8 @@
             </div>
             <div class="desc"
                 style="margin-top: 1rem; font-size: 0.73rem; color: var(--muted); font-style: italic; text-align: center;">
-                Note: Reverse translation may not always be perfect. Some words can produce the same Pig Latin form
-                (e.g., "over" and "hover" both become "overhay").
+                Note: Reverse translation uses dictionary validation and may occasionally produce unexpected results for
+                uncommon words.
             </div>
         </div>
     </div>
@@ -392,7 +392,7 @@
 
     <script>
         const vowels = ['a', 'e', 'i', 'o', 'u'];
-        const consonantClusters = ['ch', 'sh', 'th', 'ph', 'qu', 'tr', 'cr', 'br', 'fr', 'gr', 'pr', 'dr', 'bl', 'cl', 'fl', 'gl', 'pl', 'sl', 'sc', 'sk', 'sm', 'sn', 'sp', 'st', 'sw', 'thr', 'shr', 'str', 'spl', 'spr', 'squ', 'scr'];
+        const consonantClusters = ['ch', 'sh', 'th', 'ph', 'wh', 'qu', 'tr', 'cr', 'br', 'fr', 'gr', 'pr', 'dr', 'bl', 'cl', 'fl', 'gl', 'pl', 'sl', 'sc', 'sk', 'sm', 'sn', 'sp', 'st', 'sw', 'thr', 'shr', 'str', 'spl', 'spr', 'squ', 'scr'];
 
         // Cache for word validation to reduce API calls
         const wordCache = new Map();
@@ -400,6 +400,27 @@
         // Local profanity filter - only words that could match legitimate Pig Latin translations
         // e.g., "hits" -> "itshay" could reverse to an inappropriate word
         const profanityList = new Set(['shit']);
+
+        // Common words list for instant validation without API
+        const commonWords = new Set([
+            'the', 'be', 'to', 'of', 'and', 'a', 'in', 'that', 'have', 'i',
+            'it', 'for', 'not', 'on', 'with', 'he', 'as', 'you', 'do', 'at',
+            'this', 'but', 'his', 'by', 'from', 'they', 'we', 'say', 'her', 'she',
+            'or', 'an', 'will', 'my', 'one', 'all', 'would', 'there', 'their', 'what',
+            'so', 'up', 'out', 'if', 'about', 'who', 'get', 'which', 'go', 'me',
+            'when', 'make', 'can', 'like', 'time', 'no', 'just', 'him', 'know', 'take',
+            'people', 'into', 'year', 'your', 'good', 'some', 'could', 'them', 'see', 'other',
+            'than', 'then', 'now', 'look', 'only', 'come', 'its', 'over', 'think', 'also',
+            'back', 'after', 'use', 'two', 'how', 'our', 'work', 'first', 'well', 'way',
+            'even', 'new', 'want', 'because', 'any', 'these', 'give', 'day', 'most', 'us',
+            'is', 'was', 'are', 'been', 'has', 'had', 'were', 'said', 'did', 'having',
+            'hello', 'world', 'happy', 'hard', 'threw', 'three', 'played', 'built', 'painted',
+            'eat', 'love', 'friend', 'across', 'river', 'amazing', 'children', 'outside',
+            'until', 'sun', 'went', 'down', 'treehouse', 'father', 'bright', 'yellow',
+            'everyone', 'tired', 'end', 'elephant', 'ate', 'ice', 'cream', 'school',
+            'students', 'study', 'every', 'quick', 'brown', 'fox', 'jumps', 'lazy', 'dog',
+            'apples', 'oranges', 'chris', 'stones', 'said'
+        ]);
 
         function isProfanity(word) {
             return profanityList.has(word.toLowerCase());
@@ -409,7 +430,12 @@
         async function checkWordExists(word) {
             const lowerWord = word.toLowerCase();
 
-            // Check cache first
+            // Check common words list first (instant)
+            if (commonWords.has(lowerWord)) {
+                return true;
+            }
+
+            // Check cache
             if (wordCache.has(lowerWord)) {
                 return wordCache.get(lowerWord);
             }
@@ -502,32 +528,37 @@
 
             const lowerWord = word.toLowerCase();
 
-            // Check if it ends with -hay (not just -ay)
+            // Words ending in -hay could be either:
+            // 1. Vowel-start word (remove -hay)
+            // 2. Consonant-start word ending in 'h' (reverse consonants)
             if (lowerWord.endsWith('hay') && lowerWord.length > 3) {
                 const withoutHay = word.slice(0, -3);
                 const withoutAy = word.slice(0, -2);
 
-                // Check both possibilities in parallel
-                const [hayResult, consonantResult] = await Promise.all([
-                    checkWordExists(withoutHay.toLowerCase()),
-                    reverseConsonantMove(word, withoutAy)
-                ]);
+                // Try consonant reversal first
+                const consonantResult = await reverseConsonantMove(word, withoutAy);
 
-                // If removing -hay gives a valid vowel-start word, prefer it (that's the intended rule)
-                if (hayResult && isVowel(withoutHay[0])) {
+                // If consonant reversal found a common word, use it
+                if (consonantResult !== word && commonWords.has(consonantResult.toLowerCase())) {
+                    return consonantResult;
+                }
+
+                // Otherwise, check if simple -hay removal gives a common word
+                if (commonWords.has(withoutHay.toLowerCase())) {
                     return preserveCase(word, withoutHay);
                 }
 
-                // Otherwise, if consonant reversal found a valid word, use that
+                // If consonant reversal found ANY valid word, use it
                 if (consonantResult !== word) {
                     return consonantResult;
                 }
 
-                // If neither worked, return original
-                return word;
+                // Fall back to simple -hay removal
+                return preserveCase(word, withoutHay);
             }
 
-            // Check if it ends with -ay
+            // RULE 2: Words ending in -ay are consonant-start words
+            // Move the consonant(s) from the end back to the beginning
             if (lowerWord.endsWith('ay') && lowerWord.length > 2) {
                 const withoutAy = word.slice(0, -2);
                 return await reverseConsonantMove(word, withoutAy);
@@ -542,11 +573,12 @@
             // Build list of possible candidates to check
             const candidates = [];
 
-            // Check three-letter clusters
-            for (let cluster of consonantClusters) {
-                if (cluster.length === 3 && lowerWithoutAy.endsWith(cluster)) {
-                    const rest = withoutAy.slice(0, -3);
-                    candidates.push({ word: cluster + rest, original: originalWord });
+            // Try single consonant FIRST (most common case)
+            if (lowerWithoutAy.length > 0) {
+                const lastChar = lowerWithoutAy[lowerWithoutAy.length - 1];
+                if (!isVowel(lastChar)) {
+                    const rest = withoutAy.slice(0, -1);
+                    candidates.push({ word: lastChar + rest, original: originalWord, priority: 1 });
                 }
             }
 
@@ -554,16 +586,15 @@
             for (let cluster of consonantClusters) {
                 if (cluster.length === 2 && lowerWithoutAy.endsWith(cluster)) {
                     const rest = withoutAy.slice(0, -2);
-                    candidates.push({ word: cluster + rest, original: originalWord });
+                    candidates.push({ word: cluster + rest, original: originalWord, priority: 2 });
                 }
             }
 
-            // Try single consonant at the end
-            if (lowerWithoutAy.length > 0) {
-                const lastChar = lowerWithoutAy[lowerWithoutAy.length - 1];
-                if (!isVowel(lastChar)) {
-                    const rest = withoutAy.slice(0, -1);
-                    candidates.push({ word: lastChar + rest, original: originalWord });
+            // Check three-letter clusters
+            for (let cluster of consonantClusters) {
+                if (cluster.length === 3 && lowerWithoutAy.endsWith(cluster)) {
+                    const rest = withoutAy.slice(0, -3);
+                    candidates.push({ word: cluster + rest, original: originalWord, priority: 3 });
                 }
             }
 
@@ -575,7 +606,15 @@
 
                 const results = await Promise.all(validationPromises);
 
-                // Return first valid, non-profane word found
+                // Prioritize: common words first, then by priority (single > 2-letter > 3-letter)
+                for (let result of results) {
+                    if (result.isValid && !isProfanity(result.word) && commonWords.has(result.word.toLowerCase())) {
+                        return preserveCase(result.original, result.word);
+                    }
+                }
+
+                // If no common word found, return first valid by priority
+                results.sort((a, b) => a.priority - b.priority);
                 for (let result of results) {
                     if (result.isValid && !isProfanity(result.word)) {
                         return preserveCase(result.original, result.word);
